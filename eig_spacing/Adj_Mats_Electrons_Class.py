@@ -6,11 +6,12 @@ It is also updated for Python 3.7
 Author: David Corbo
 Last Edit: 1/27/20
 """
-
 import numpy as np
 import os
 import sys
 import seaborn as sns
+import pandas as pd
+from matplotlib import cm
 import matplotlib.pyplot as plt
 
 
@@ -96,6 +97,7 @@ class Adj_Mats(object):
         self.cont_ent = None
         self.eig_spacings = np.zeros(1, int)
         self.bin_probs_mod = np.zeros(1, int)
+        self.multi_eigs = np.zeros(1, int)
     
     def set_atom_dists(self, new_dists):
         self.distance_graphs = new_dists
@@ -250,6 +252,26 @@ class Adj_Mats(object):
             self.eigenvalues[frame] = frame_eigs
         return self.eigenvalues
     
+    def get_multi_eigs(self, ham_iter=10):
+        elec_count = len(self.elec_adjacency_graphs[0])
+        self.multi_eigs = np.zeros((len(self.elec_adjacency_graphs), ham_iter, elec_count))
+        for frame in range(len(self.multi_eigs)):
+            for i in range(len(self.multi_eigs[frame])):
+                ham_it = np.zeros(len(self.multi_eigs[frame, i]))
+                r = np.random.normal(size=(elec_count, elec_count))
+                rt = np.transpose(r)
+                h = (r + rt) / np.sqrt(2 * elec_count)          
+                adj_r = self.elec_adjacency_graphs[frame] * h
+                eigs = np.ndarray.tolist(np.linalg.eigvals(adj_r))
+                for j in range(len(eigs)):
+                    ham_it[j] = np.real(eigs[j])
+                ham_it.sort()
+                self.multi_eigs[frame, i] = ham_it
+                print("FRAME NUMBER {}, ITERATION NUMBER {}".format(frame + 1, i + 1))
+                print(self.multi_eigs[frame, i])
+        return self.multi_eigs
+                    
+    
     def make_eigs_spacing(self, hamiltonian_iter=10):
         elec_count = len(self.elec_adjacency_graphs[0])
         self.eig_spacings = np.zeros((len(self.elec_adjacency_graphs), hamiltonian_iter))
@@ -301,26 +323,68 @@ class Adj_Mats(object):
 def calc_ent(m, n):
     return m/2 + n/2 - (m/2)*np.log(2) + (m/2)*np.log(n) + (n/2)*np.log(n) - (m/2)*np.log(np.pi) - (n/2)*np.log(np.pi)
     
-if __name__ == "__main__":
+if __name__ != "__main__":
     adj_worker = Adj_Mats('first_fully.pdb')
     adj_worker.get_elec_adj()
-    adj_worker.make_eigs_spacing(2000)
+    adj_worker.get_multi_eigs(500)
+    
+    np.savetxt('ext_eigs.csv', adj_worker.multi_eigs[0], delimiter=',')
+    np.savetxt('alpha_eigs.csv', adj_worker.multi_eigs[1], delimiter=',')
+    
+    
+if __name__ == "__main__":
+    
+    
+    ext_eigs = np.genfromtxt('ext_eigs.csv', delimiter=',')
+    alpha_eigs = np.genfromtxt('alpha_eigs.csv', delimiter=',')
+    
+    ext_difs = np.zeros((len(ext_eigs), len(ext_eigs[0]) - 1))
+    alpha_difs = np.zeros((len(alpha_eigs), len(alpha_eigs[0]) - 1))
+
+    for i in range(len(ext_eigs[0]) - 1):
+        for j in range(len(ext_eigs)):
+            ext_difs[j, i] = abs(ext_eigs[j, i] - ext_eigs[j, i + 1])
+    
+    for i in range(len(alpha_eigs[0]) - 1):
+        for j in range(len(alpha_eigs)):
+            alpha_difs[j, i] = abs(alpha_eigs[j, i] - alpha_eigs[j, i + 1])
+            
+            
+    labels = np.tile(list(range(693)), 500)
+    ext_difs = ext_difs.flatten()
+    alpha_difs = alpha_difs.flatten()
+    
+    ext_out = pd.DataFrame(data=dict(l=labels, d=ext_difs))
+
+    ext_out.to_csv('ext_df.csv')
+    
+    alpha_out = pd.DataFrame(data=dict(l=labels, d=alpha_difs))
+
+    alpha_out.to_csv('alpha_df.csv')
+ #   np.savetxt('ext_spacings.csv', ext_out, delimiter=',')
+ #   np.savetxt('alpha_spacings.csv', alpha_difs, delimiter=',')
 
     
     
-    ext_std = np.std(adj_worker.eig_spacings[0])
-    fig = plt.figure(figsize=(16, 9))
-    plt.hist(adj_worker.eig_spacings[0], bins=40)
-    plt.title("Extended Eigenvalue Spacings STDev: {}".format(ext_std))
-    fig.savefig("ext_eig_spacings.png", dpi=200)
-    plt.clf()
     
-    alpha_std = np.std(adj_worker.eig_spacings[1])
-    fig = plt.figure(figsize=(16, 9))
-    plt.hist(adj_worker.eig_spacings[1], bins=40)
-    plt.title("Alpha Eigenvalue Spacings STDev: {}".format(alpha_std))
-    fig.savefig("alpha_eig_spacings.png", dpi=200)
-    plt.clf()
+    
+    
+#    ext_std = np.std(adj_worker.eig_spacings[0])
+#    fig = plt.figure(figsize=(16, 9))
+#    plt.hist(adj_worker.eig_spacings[0], bins=40)
+#    plt.title("Extended Eigenvalue Spacings STDev: {}".format(ext_std))
+#    fig.savefig("ext_eig_spacings.png", dpi=200)
+#    plt.clf()
+#    
+#    alpha_std = np.std(adj_worker.eig_spacings[1])
+#    fig = plt.figure(figsize=(16, 9))
+#    plt.hist(adj_worker.eig_spacings[1], bins=40)
+#    plt.title("Alpha Eigenvalue Spacings STDev: {}".format(alpha_std))
+#    fig.savefig("alpha_eig_spacings.png", dpi=200)
+#    plt.clf()
+    
+     
+    
     
     
         
